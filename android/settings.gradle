@@ -1,0 +1,3 @@
+rootProject.name = 'inovaClima'
+
+include ':app'
