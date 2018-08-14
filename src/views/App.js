@@ -11,15 +11,14 @@ import {StyleSheet, Text, View, Button,
   Image, TouchableOpacity, TextInput, ScrollView} from 'react-native';
 
 import { createStackNavigator } from 'react-navigation';
+import Icon from 'react-native-vector-icons/Ionicons';
+
 import { DATA } from '../constants';
 
 class LogoTitle extends Component {
   render() {
     return (
-      <Image
-        source={require('../imgs/spyro.png')}
-        style={{ width: 30, height: 30, alignItems: 'center'}}
-      />
+      <Icon name="ios-partly-sunny" size={30} color="#4F8EF7" />
     );
   }
 }
@@ -38,19 +37,37 @@ class ModalScreen extends Component {
   }
 }
 
-class SeatchForm extends Component {
+class SearchForm extends Component {
+
+  constructor(props) {
+    super(props);
+    const searchI = this.props.searchI;
+    this.state = {
+      inputS: 'Digite o nome do Bairro em Recife',
+      searchI: searchI,
+    };
+  }
 
   render() {
     return (
       <View style={styles.searchView}>
         <TextInput
           style={styles.input2}
-          placeholder="Digite o nome do Bairro em Recife"
+          placeholder={this.state.inputS}
+          onChangeText={ (searchI) => this.setState({searchI}) }
+          value={this.state.searchI}
         />
         <Button
           style={styles.button2}
-          onPress={() => alert('This is a button!')}
-          title="Ok"
+          onPress={ 
+            () => { 
+              this.props.navigate(this.props.destination, 
+                {search: this.state.searchI }
+              );
+              console.log('executou o SearchForm');
+            }
+          }          
+          title='Ok'
         />
       </View>
     );
@@ -58,32 +75,82 @@ class SeatchForm extends Component {
 
 }
 
+class SearchScreen extends Component {
+  
+  constructor(props) {
+    super(props);
+    const { navigation } = this.props;
+    this.state = {
+      searchI: navigation.getParam('search', ''),
+    };
+
+    this.navigation = navigation;
+  }
+
+  render() {
+    return (
+      <View style={{flex: 1}}>
+        <View style={[styles.header, styles.withBottomBorder]} >
+        <Text style={styles.titulo}>Pesquisa: {this.state.searchI}</Text>
+        </View>
+        <View style={styles.body} >
+          
+        </View>
+        <View style={styles.footer}>
+          <Text>Inova Clima</Text>
+        </View>
+      </View>
+    );
+
+  }
+}
+
 class Itens extends Component {
   render() {
+      const Max = parseInt(this.props.item.previsao.max);
+      let iconName = 'ios-sunny';
+      let colorHex = '#efd83d';
+      let bookmarkIcon = (this.props.item.bookmark) ? 'ios-star' : 'ios-star-outline';
+      if( Max >= 23 ) {
+        iconName = 'ios-sunny';
+      } else if ( Max < 23 && Max > 19) {
+        iconName = 'ios-partly-sunny';
+        colorHex = '#47b5f4';
+      } else {
+        iconName = 'ios-cloud';
+        colorHex = '#297dae';
+      }
+
       return (
           <View style={styles.itens_item}>
               <View style={styles.itens_foto}>
-                  <Image style={{ height: 100, width: 100 }} source={{ uri: 'http://via.placeholder.com/100x100'}} />
+                  {/*<Image style={{ height: 100, width: 100 }} source={{ uri: 'http://via.placeholder.com/100x100'}} />*/}
+                    <Icon name={iconName} size={100} color={colorHex} />
               </View>
-
               <View style={styles.itens_destalhesItem}>
-                  <Text style={styles.itens_txtTitulo}>{this.props.item.cidade} - {this.props.item.nome}</Text>
+                  <TouchableOpacity onPress={() => alert('Max: '+Max)}>
+                    <Text style={styles.itens_txtTitulo}>{this.props.item.cidade} - {this.props.item.nome}</Text>
+                  </TouchableOpacity>
                   <Text style={styles.itens_txtValor}>MAX: {this.props.item.previsao.max}</Text>
                   <Text style={styles.itens_txtValor}>MIN: {this.props.item.previsao.min}</Text>
-                  <Text style={styles.itens_txtValor}>Favorito: Sim</Text>
+                  <TouchableOpacity onPress={() => alert('Chama a função checkBookmark')}>
+                    <Text style={styles.itens_txtValor}>Favorito:
+                        <Icon name={bookmarkIcon} size={20} color="#4F8EF7" style={{ margin: 30 }}/>
+                    </Text>
+                  </TouchableOpacity>
               </View>
           </View>
       );
   }
 }
 
-class HomeScreen extends Component {
 
+class HomeScreen extends Component {
   render() {
     return (
       <View style={{flex: 1}}>
         <View style={[styles.header, styles.withBottomBorder]} >
-          <SeatchForm />
+          <SearchForm navigate={this.props.navigation.navigate} destination="Search"/>
         </View>
         <View style={styles.body} >
           <Text style={styles.titulo}>Favoritos</Text>
@@ -141,6 +208,9 @@ const MainStack = createStackNavigator(
   {
     Home: {
       screen: HomeScreen,
+    },
+    Search: {
+      screen: SearchScreen,
     },
     Details: {
       screen: DetailsScreen,
