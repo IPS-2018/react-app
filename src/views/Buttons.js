@@ -59,4 +59,43 @@
     title='Console Bookmark'
     color="#00534f"
 />
+<Button
+    onPress={
+        () => {
+        getSearchPlaces('boa', nicknameId).then( data => {
+            console.log('getSearchPlaces: ', data);
+        });
+        }
+    }
+    title='Console Search Boa API'
+    color="#00534f"
+/>
+<Button
+onPress={
+    () => {
+    store.keys().then( k => {
+        console.log('keys: ', k);
+    })
+    }
+}
+title='Console chaves Store'
+color="#005300"
+/>
+<Button
+    onPress={
+        () => {
+        store.keys().then( k => {
+            k.map( key => {
+            store.delete(key)
+                .then( (res) => {
+                console.log('deletado key ', key);
+                }); 
+            });    
+        })
+        }
+    }
+    title='Excluir as Chaves'
+    color="#d9534f"
+/>
+
 </View>

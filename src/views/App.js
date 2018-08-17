@@ -17,12 +17,12 @@ import _ from 'lodash';
 import store from 'react-native-simple-store';
 
 import { DATA } from '../constants';
+import { getSearchPlaces, favoritePlace, getMyFavorites } from '../services/inovaClima';
 
 const storage_prefix='@InovaClima:';
 const storage_bookmark=storage_prefix+'bookmark';
 const storage_user=storage_prefix+'user';
-
-let GlobalBookmarkUpdated = 0;
+const nicknameId = '1';
 
 const isFavorite = async (id) => {
   let resultado = false;
@@ -45,12 +45,11 @@ const handleFavorite = async(place) => {
     if(bairro) {
       newList = _.without(res, bairro);
       store.save(storage_bookmark, newList);
-      GlobalBookmarkUpdated = GlobalBookmarkUpdated++;
     } else {
       store.push(storage_bookmark, place);
-      GlobalBookmarkUpdated = GlobalBookmarkUpdated++;
       resultado = true;
     }
+    favoritePlace(place.id, nicknameId).then( res => {  console.log('Favorito API: ', res) });
   }).catch( err => {
     console.log('isFavorite error: ', err);
   });
@@ -124,10 +123,28 @@ class SearchScreen extends Component {
     const { navigation } = this.props;
     this.state = {
       searchI: navigation.getParam('search', ''),
-      bookmark: []
+      bookmark: [],
+      isLoading: true,
+      resultado: []
     };
 
     this.navigation = navigation;
+  }
+
+  execSearch = async (searchI, nicknameId) => {
+    await getSearchPlaces(searchI, nicknameId).then( (res) => {
+        if( this.state.isLoading )
+          this.setState({ resultado: res.places, isLoading: false });
+        else
+          this.setState({ resultado: res.places });
+      }).catch( err => {
+          console.log('execSearch error: ', err);
+          this.setState({ isLoading: false });
+      });
+  }
+
+  componentWillMount() {
+    this.execSearch(this.state.searchI, nicknameId);
   }
 
   render() {
@@ -137,15 +154,24 @@ class SearchScreen extends Component {
         <Text style={styles.titulo}>Pesquisa: {this.state.searchI}</Text>
         </View>
         <View style={styles.body} >
-        <ScrollView style={{ backgroundColor: '#DDD' }}>
+        {
+          (this.state.isLoading) &&
+          <ActivityIndicator style={styles.loading} color="#0000FF" size="small"/> 
+        }
+        {
+          (!this.state.resultado.length>0) && (!this.state.isLoading) &&
+          <Text>Não há resultados</Text>
+        }
+        {
+          (this.state.resultado.length>0) &&
+          <ScrollView style={{ backgroundColor: '#DDD' }}>
           {
-            DATA.map( el => {
-              if( el.nome.toLowerCase().indexOf(this.state.searchI.toLowerCase()) >= 0) {
-                return <Itens key={el.nome} item={el} />
-              }
+            this.state.resultado.map( el => {
+              return <Itens key={el.id} item={el} />
             })
           }
-        </ScrollView>
+          </ScrollView>
+        }
         </View>
         <View style={styles.footer}>
           <Text>Inova Clima</Text>
@@ -166,16 +192,17 @@ class Itens extends Component {
       bookmarkIcon: 'ios-star-outline',
       iconName: 'ios-sunny',
       colorHex: '#efd83d',
-      Max: parseInt(props.item.previsao.max),
+      Max: parseInt(props.item.previsoes[0].maximaGrau),
+      iconN: parseInt(props.item.previsoes[0].icon),
       isLoading: false
     };
   }
 
   componentWillMount() {
-    const Max = this.state.Max;
-    if( Max >= 23 ) {
+    const iconN = this.state.iconN;
+    if( iconN === 1 ) {
       this.setState({iconName: 'ios-sunny'});
-    } else if ( Max < 23 && Max > 19) {
+    } else if ( iconN === 2) {
       this.setState({iconName: 'ios-partly-sunny', colorHex: '#47b5f4'});
     } else {
       this.setState({iconName: 'ios-cloud', colorHex: '#297dae'});
@@ -208,16 +235,16 @@ class Itens extends Component {
               <Icon name={this.state.iconName} size={100} color={this.state.colorHex} />
             </View>
             <View style={styles.itens_destalhesItem}>
-                <TouchableOpacity onPress={() => alert('Max: '+this.state.Max)}>
-                  <Text style={styles.itens_txtTitulo}>{this.props.item.cidade} - {this.props.item.nome}</Text>
+                <TouchableOpacity onPress={() => alert('ID: '+this.props.item.id+' iconN: '+this.state.iconN)}>
+                  <Text style={styles.itens_txtTitulo}>{this.props.item.cidade} - {this.props.item.bairro}</Text>
                 </TouchableOpacity>
-                <Text style={styles.itens_txtValor}>MAX: {this.props.item.previsao.max}</Text>
-                <Text style={styles.itens_txtValor}>MIN: {this.props.item.previsao.min}</Text>
+                <Text style={styles.itens_txtValor}>MAX: {this.props.item.previsoes[0].maximaGrau}</Text>
+                <Text style={styles.itens_txtValor}>MIN: {this.props.item.previsoes[0].minimaGrau}</Text>
                 {
                   (!this.state.isLoading) &&
                   <TouchableOpacity onPress={ () => this.checkFavorite(this.props.item) }>
                     <Text style={styles.itens_txtValor}>Favorito:
-                        <Icon name={this.state.bookmarkIcon} 
+                        <Icon name={this.state.bookmarkIcon}
                           size={20} color="#4F8EF7" style={{ margin: 30 }}/>
                     </Text>
                   </TouchableOpacity>
@@ -235,21 +262,46 @@ class HomeScreen extends Component {
     this.state = {
       bookmark: new Array(),
       isLoading: true,
-      updateTime: 0
+      updateTime: 0,
+      syncFavoritos: false
     };
   }
 
+  syncFavoritos = async(nicknameId) => {
+    let resultado = false;
+    await getMyFavorites(nicknameId).then( res => {
+      store.save(storage_bookmark, res.places);
+      console.log('executou o syncFavoritos');
+      resultado = true;
+      this.setState({ bookmark: res.places, isLoading: false, syncFavoritos: true });
+    });
+    return resultado;
+  }
+
   updateBookmark = async () => {
-    await store.get(storage_bookmark)
-      .then( (res) => {
-        if( this.state.isLoading )
-          this.setState({ bookmark: res, isLoading: false });
-        else
-          this.setState({ bookmark: res });
-      }).catch( err => {
-          console.log('updateBookmark error: ', err);
-          this.setState({ isLoading: false });
-      });
+    if ( this.state.syncFavoritos ) {
+      await store.get(storage_bookmark)
+        .then( (res) => {
+          console.log('executou o updateBookmark');
+          if( this.state.isLoading ) {
+            if(res) {
+              this.setState({ bookmark: res, isLoading: false });
+              console.log('atualizou a lista bookmark');
+            } else {
+              this.setState({ isLoading: false });
+            }
+          } else {
+            if(res) {
+              this.setState({ bookmark: res });
+            }
+          }
+        }).catch( err => {
+            console.log('updateBookmark error: ', err);
+            this.setState({ isLoading: false });
+        });
+    } else {
+      this.syncFavoritos(nicknameId);
+    }
   }
 
   componentWillMount() {
@@ -286,7 +338,7 @@ class HomeScreen extends Component {
             (this.state.bookmark.length > 0) &&
             <ScrollView style={{ backgroundColor: '#DDD' }}>
               { 
-                this.state.bookmark.map( (el) => <Itens key={el.nome} item={el} />)
+                this.state.bookmark.map( (el) => <Itens key={el.id} item={el} />)
               }
             </ScrollView>  
           }

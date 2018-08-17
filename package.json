@@ -6,6 +6,7 @@
     "start": "node node_modules/react-native/local-cli/cli.js start",
     "test": "jest"
   },
+  "main": "index.js",
   "dependencies": {
     "axios": "^0.18.0",
     "lodash": "^4.17.10",
