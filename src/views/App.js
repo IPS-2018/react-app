@@ -8,12 +8,54 @@
 
 import React, {Component} from 'react';
 import {StyleSheet, Text, View, Button, 
-  Image, TouchableOpacity, TextInput, ScrollView} from 'react-native';
+  TouchableOpacity, TextInput, ScrollView,
+  ActivityIndicator, Alert } from 'react-native';
 
 import { createStackNavigator } from 'react-navigation';
 import Icon from 'react-native-vector-icons/Ionicons';
+import _ from 'lodash';
+import store from 'react-native-simple-store';
 
 import { DATA } from '../constants';
+
+const storage_prefix='@InovaClima:';
+const storage_bookmark=storage_prefix+'bookmark';
+const storage_user=storage_prefix+'user';
+
+let GlobalBookmarkUpdated = 0;
+
+const isFavorite = async (id) => {
+  let resultado = false;
+  await store.get(storage_bookmark).then( res => {
+    let bairro = _.find(res, {id} );
+    if(bairro) {
+      resultado = true;
+    }
+  }).catch( err => {
+    console.log('isFavorite error: ', err);
+  });
+  return resultado;
+}
+
+const handleFavorite = async(place) => {
+  let resultado = false;
+  let newList = null;
+  await store.get(storage_bookmark).then( res => {
+    let bairro = _.find(res, {id: place.id} );
+    if(bairro) {
+      newList = _.without(res, bairro);
+      store.save(storage_bookmark, newList);
+      GlobalBookmarkUpdated = GlobalBookmarkUpdated++;
+    } else {
+      store.push(storage_bookmark, place);
+      GlobalBookmarkUpdated = GlobalBookmarkUpdated++;
+      resultado = true;
+    }
+  }).catch( err => {
+    console.log('isFavorite error: ', err);
+  });
+  return resultado;
+}
 
 class LogoTitle extends Component {
   render() {
@@ -60,11 +102,11 @@ class SearchForm extends Component {
         <Button
           style={styles.button2}
           onPress={ 
-            () => { 
-              this.props.navigate(this.props.destination, 
-                {search: this.state.searchI }
-              );
-              console.log('executou o SearchForm');
+            () => {
+              if(this.state.searchI)
+                this.props.navigate(this.props.destination, 
+                  {search: this.state.searchI }
+                );
             }
           }          
           title='Ok'
@@ -82,6 +124,7 @@ class SearchScreen extends Component {
     const { navigation } = this.props;
     this.state = {
       searchI: navigation.getParam('search', ''),
+      bookmark: []
     };
 
     this.navigation = navigation;
@@ -94,7 +137,15 @@ class SearchScreen extends Component {
         <Text style={styles.titulo}>Pesquisa: {this.state.searchI}</Text>
         </View>
         <View style={styles.body} >
-          
+        <ScrollView style={{ backgroundColor: '#DDD' }}>
+          {
+            DATA.map( el => {
+              if( el.nome.toLowerCase().indexOf(this.state.searchI.toLowerCase()) >= 0) {
+                return <Itens key={el.nome} item={el} />
+              }
+            })
+          }
+        </ScrollView>
         </View>
         <View style={styles.footer}>
           <Text>Inova Clima</Text>
@@ -106,46 +157,115 @@ class SearchScreen extends Component {
 }
 
 class Itens extends Component {
-  render() {
-      const Max = parseInt(this.props.item.previsao.max);
-      let iconName = 'ios-sunny';
-      let colorHex = '#efd83d';
-      let bookmarkIcon = (this.props.item.bookmark) ? 'ios-star' : 'ios-star-outline';
-      if( Max >= 23 ) {
-        iconName = 'ios-sunny';
-      } else if ( Max < 23 && Max > 19) {
-        iconName = 'ios-partly-sunny';
-        colorHex = '#47b5f4';
-      } else {
-        iconName = 'ios-cloud';
-        colorHex = '#297dae';
-      }
 
-      return (
-          <View style={styles.itens_item}>
-              <View style={styles.itens_foto}>
-                  {/*<Image style={{ height: 100, width: 100 }} source={{ uri: 'http://via.placeholder.com/100x100'}} />*/}
-                    <Icon name={iconName} size={100} color={colorHex} />
-              </View>
-              <View style={styles.itens_destalhesItem}>
-                  <TouchableOpacity onPress={() => alert('Max: '+Max)}>
-                    <Text style={styles.itens_txtTitulo}>{this.props.item.cidade} - {this.props.item.nome}</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.itens_txtValor}>MAX: {this.props.item.previsao.max}</Text>
-                  <Text style={styles.itens_txtValor}>MIN: {this.props.item.previsao.min}</Text>
-                  <TouchableOpacity onPress={() => alert('Chama a função checkBookmark')}>
+  constructor(props) {
+    super(props);
+    this.state = {
+      favorite: false,
+      checkFavorite: true,
+      bookmarkIcon: 'ios-star-outline',
+      iconName: 'ios-sunny',
+      colorHex: '#efd83d',
+      Max: parseInt(props.item.previsao.max),
+      isLoading: false
+    };
+  }
+
+  componentWillMount() {
+    const Max = this.state.Max;
+    if( Max >= 23 ) {
+      this.setState({iconName: 'ios-sunny'});
+    } else if ( Max < 23 && Max > 19) {
+      this.setState({iconName: 'ios-partly-sunny', colorHex: '#47b5f4'});
+    } else {
+      this.setState({iconName: 'ios-cloud', colorHex: '#297dae'});
+    }
+
+    isFavorite(this.props.item.id).then( res => { 
+      if(res) {
+        this.setState({favorite: res, bookmarkIcon: 'ios-star'});
+      }
+    });
+  }
+
+  checkFavorite(place) {
+    this.setState({isLoading: true});
+    handleFavorite(place).then(res => {
+      if(res) { // virou favorito
+        this.setState({favorite: res, bookmarkIcon: 'ios-star', isLoading: false});
+        Alert.alert(place.nome+' entrou na lista de Favoritos');
+      } else { // nao eh mais favorito
+        this.setState({favorite: res, bookmarkIcon: 'ios-star-outline', isLoading: false});
+        Alert.alert(place.nome+' saiu da lista de Favoritos');
+      }
+    });
+  }
+
+  render() {
+    return (
+        <View style={styles.itens_item}>
+            <View style={styles.itens_foto}>
+              <Icon name={this.state.iconName} size={100} color={this.state.colorHex} />
+            </View>
+            <View style={styles.itens_destalhesItem}>
+                <TouchableOpacity onPress={() => alert('Max: '+this.state.Max)}>
+                  <Text style={styles.itens_txtTitulo}>{this.props.item.cidade} - {this.props.item.nome}</Text>
+                </TouchableOpacity>
+                <Text style={styles.itens_txtValor}>MAX: {this.props.item.previsao.max}</Text>
+                <Text style={styles.itens_txtValor}>MIN: {this.props.item.previsao.min}</Text>
+                {
+                  (!this.state.isLoading) &&
+                  <TouchableOpacity onPress={ () => this.checkFavorite(this.props.item) }>
                     <Text style={styles.itens_txtValor}>Favorito:
-                        <Icon name={bookmarkIcon} size={20} color="#4F8EF7" style={{ margin: 30 }}/>
+                        <Icon name={this.state.bookmarkIcon} 
+                          size={20} color="#4F8EF7" style={{ margin: 30 }}/>
                     </Text>
                   </TouchableOpacity>
-              </View>
-          </View>
-      );
+                }
+            </View>
+        </View>
+    );
   }
 }
 
-
 class HomeScreen extends Component {
+
+  constructor(props) {
+    super(props);
+    this.state = {
+      bookmark: new Array(),
+      isLoading: true,
+      updateTime: 0
+    };
+  }
+
+  updateBookmark = async () => {
+    await store.get(storage_bookmark)
+      .then( (res) => {
+        if( this.state.isLoading )
+          this.setState({ bookmark: res, isLoading: false });
+        else
+          this.setState({ bookmark: res });
+      }).catch( err => {
+          console.log('updateBookmark error: ', err);
+          this.setState({ isLoading: false });
+      });
+  }
+
+  componentWillMount() {
+    this.updateBookmark();
+  }
+
+  componentDidMount() {
+    this._interval = setInterval(() => {
+      this.updateBookmark();
+    }, 5000);
+  }
+
+  componentWillUnmount() {
+    clearInterval(this._interval);
+  }
+
   render() {
     return (
       <View style={{flex: 1}}>
@@ -154,9 +274,22 @@ class HomeScreen extends Component {
         </View>
         <View style={styles.body} >
           <Text style={styles.titulo}>Favoritos</Text>
-          <ScrollView style={{ backgroundColor: '#DDD' }}>
-            { DATA.map( item => (<Itens key={item.nome} item={item} />)) }
-          </ScrollView>
+          {
+            (this.state.isLoading) &&
+            <ActivityIndicator style={styles.loading} color="#0000FF" size="small"/>
+          }
+          {
+            (!this.state.bookmark.length>0) && (!this.state.isLoading) &&
+            <Text>Não há favoritos</Text>
+          }
+          {
+            (this.state.bookmark.length > 0) &&
+            <ScrollView style={{ backgroundColor: '#DDD' }}>
+              { 
+                this.state.bookmark.map( (el) => <Itens key={el.nome} item={el} />)
+              }
+            </ScrollView>  
+          }
         </View>
         <View style={styles.footer}>
           <Text>Inova Clima</Text>
@@ -269,6 +402,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#F5FCFF',
   },
+  loading: {
+    marginTop: 20,
+  },
   withBottomBorder: {
     borderBottomColor: '#00f',
     borderBottomWidth: 2
@@ -286,7 +422,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'steelblue',
   },
   searchView: {
-    flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', alignSelf: 'center'
+    flex: 1, flexDirection: 'row', 
+    justifyContent: 'space-around',
+    alignItems: 'center', alignSelf: 'center',
   },
   titulo: {
     textAlign: 'center',
@@ -307,7 +445,7 @@ const styles = StyleSheet.create({
   },
   input2: {
     backgroundColor: '#FFF',
-    height: 40,
+    height: 35,
     width: 300,
     borderRadius: 3,
     marginTop: 10,
@@ -316,12 +454,18 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica',
   },
   button2: {
-    height: 40,
-    width: 40,
+    height: 35,
     borderRadius: 3,
-    marginTop: 10,
     fontSize: 12,
-    paddingHorizontal: 10,
+    fontFamily: 'Helvetica'
+  },
+  btnDanger: {
+    backgroundColor:'#d9534f',
+    borderRadius:10,
+    borderWidth: 1,
+    borderColor: '#fff',
+    height: 35,
+    fontSize: 12,
     fontFamily: 'Helvetica'
   },
   itens_item: {

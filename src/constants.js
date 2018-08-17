@@ -6,8 +6,7 @@ export const DATA = [
         previsao: {
             max: '32',
             min: '22',
-        },
-        bookmark: true
+        }
     },
     {
         id: 2,
@@ -16,8 +15,7 @@ export const DATA = [
         previsao: {
             max: '22',
             min: '19',
-        },
-        bookmark: false
+        }
     },
     {
         id: 3,
@@ -26,8 +24,7 @@ export const DATA = [
         previsao: {
             max: '19',
             min: '17',
-        },
-        bookmark: true
+        }
     },
     {
         id: 4,
