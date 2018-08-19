@@ -22,6 +22,7 @@ import { getSearchPlaces, favoritePlace, getMyFavorites } from '../services/inov
 const storage_prefix='@InovaClima:';
 const storage_bookmark=storage_prefix+'bookmark';
 const storage_user=storage_prefix+'user';
+const storage_local_update=storage_prefix+'local_update';
 const nicknameId = '1';
 
 const isFavorite = async (id) => {
@@ -50,6 +51,7 @@ const handleFavorite = async(place) => {
       resultado = true;
     }
     favoritePlace(place.id, nicknameId).then( res => {  console.log('Favorito API: ', res) });
+    store.save(storage_local_update, '1');
   }).catch( err => {
     console.log('isFavorite error: ', err);
   });
@@ -192,10 +194,11 @@ class Itens extends Component {
       bookmarkIcon: 'ios-star-outline',
       iconName: 'ios-sunny',
       colorHex: '#efd83d',
-      Max: parseInt(props.item.previsoes[0].maximaGrau),
-      iconN: parseInt(props.item.previsoes[0].icon),
+      Max: parseInt(  _.find( props.item.previsoes, {periodo: 'Manha'} ).maximaGrau ),
+      Min: parseInt(  _.find( props.item.previsoes, {periodo: 'Manha'} ).minimaGrau ),
+      iconN: parseInt( _.find( props.item.previsoes, {periodo: 'Manha'} ).icon ),
       isLoading: false
-    };
+    }; 
   }
 
   componentWillMount() {
@@ -208,11 +211,34 @@ class Itens extends Component {
       this.setState({iconName: 'ios-cloud', colorHex: '#297dae'});
     }
 
-    isFavorite(this.props.item.id).then( res => { 
+    isFavorite(this.props.item.id).then( res => {
       if(res) {
         this.setState({favorite: res, bookmarkIcon: 'ios-star'});
       }
     });
+  }
+
+  componentWillReceiveProps() {
+    const iconN = this.state.iconN;
+    let iconName = 'ios-sunny';
+    let colorHex = '#efd83d';
+    if( iconN === 1 ) {
+      iconName = 'ios-sunny';
+    } else if ( iconN === 2) {
+      iconName = 'ios-partly-sunny';
+      colorHex = '#47b5f4';
+    } else {
+      iconName = 'ios-cloud';
+      colorHex = '#297dae';
+    }
+    let obj = {
+      iconName: iconName,
+      colorHex: colorHex,
+      Max: parseInt(  _.find( this.props.item.previsoes, {periodo: 'Manha'} ).maximaGrau ),
+      Min: parseInt(  _.find( this.props.item.previsoes, {periodo: 'Manha'} ).minimaGrau ),
+      iconN: parseInt( _.find( this.props.item.previsoes, {periodo: 'Manha'} ).icon ),
+    }
+    this.setState( obj );
   }
 
   checkFavorite(place) {
@@ -238,8 +264,8 @@ class Itens extends Component {
                 <TouchableOpacity onPress={() => alert('ID: '+this.props.item.id+' iconN: '+this.state.iconN)}>
                   <Text style={styles.itens_txtTitulo}>{this.props.item.cidade} - {this.props.item.bairro}</Text>
                 </TouchableOpacity>
-                <Text style={styles.itens_txtValor}>MAX: {this.props.item.previsoes[0].maximaGrau}</Text>
-                <Text style={styles.itens_txtValor}>MIN: {this.props.item.previsoes[0].minimaGrau}</Text>
+                <Text style={styles.itens_txtValor}>MAX: {this.state.Max}</Text>
+                <Text style={styles.itens_txtValor}>MIN: {this.state.Min}</Text>
                 {
                   (!this.state.isLoading) &&
                   <TouchableOpacity onPress={ () => this.checkFavorite(this.props.item) }>
@@ -261,47 +287,110 @@ class HomeScreen extends Component {
     super(props);
     this.state = {
       bookmark: new Array(),
+      bookmark_temp: new Array(),
       isLoading: true,
       updateTime: 0,
-      syncFavoritos: false
+      syncFavoritos: false,
+      differences: null
     };
   }
 
-  syncFavoritos = async(nicknameId) => {
-    let resultado = false;
-    await getMyFavorites(nicknameId).then( res => {
-      store.save(storage_bookmark, res.places);
-      console.log('executou o syncFavoritos');
-      resultado = true;
-      this.setState({ bookmark: res.places, isLoading: false, syncFavoritos: true });
-    });
+  diferencaEntreListas( list1, list2 ) {
+    let resultado = "";
+    list1.map( el1 => {
+      el2 = _.find( list2, {id: el1.id} );
+      if( el2 !=='undefined') {
+        let bairro = el2.bairro;
+        let previsoes1= el1.previsoes;
+        let previsoes2= el2.previsoes;
+        let isEqual = _.isEqual( previsoes1.sort(), previsoes2.sort() );
+        if( !isEqual ) {
+          resultado += `- ${bairro}: `;
+          previsoes1.map( (p,i) => {
+            let pEqual = _.isEqual( p, previsoes2[i]);
+            if(!pEqual) resultado += ` ${p.periodo} `;
+          })
+        }
+        resultado += "\n";
+      }
+    })
     return resultado;
   }
 
-  updateBookmark = async () => {
-    if ( this.state.syncFavoritos ) {
-      await store.get(storage_bookmark)
-        .then( (res) => {
-          console.log('executou o updateBookmark');
-          if( this.state.isLoading ) {
-            if(res) {
-              this.setState({ bookmark: res, isLoading: false });
-              console.log('atualizou a lista bookmark');
-            } else {
-              this.setState({ isLoading: false });
+  compareList() {
+    let local_update = null; 
+    let strResultado = "";
+    store.get(storage_local_update).then( 
+      res => local_update = res
+    ).then( () => {
+      store.get(storage_bookmark).then( bookmark => {
+        if( bookmark !== null && bookmark !=='undefined') {
+          let bookmarkLocal = bookmark;
+          let bookmark_temp = this.state.bookmark_temp;
+          // compara as duas listas
+          if ( _.isEqual(bookmarkLocal.sort(), bookmark_temp.sort()) ) {
+            //console.log('as listas são iguais');
+            if( local_update === '1' ) {
+              // atualiza o bookmark do state
+              store.save(storage_local_update, '0');
+              this.setState({ bookmark: bookmark_temp });
             }
           } else {
-            if(res) {
-              this.setState({ bookmark: res });
-            }
+            //console.log('as listas são diferentes');
+            strResultado = this.diferencaEntreListas( bookmarkLocal, bookmark_temp);
+            // atualiza o bookmark do state
+            this.setState({ bookmark: bookmark_temp, isLoading: true });
+            // atualiza o bookmark do storage
+            store.save(storage_bookmark, bookmark_temp);
+            Alert.alert(
+              'Alterações de Previsões',
+              strResultado,
+              [
+                {text: 'OK'}
+              ],
+              { cancelable: false }
+            );
           }
-        }).catch( err => {
-            console.log('updateBookmark error: ', err);
-            this.setState({ isLoading: false });
-        });
-    } else {
-      this.syncFavoritos(nicknameId);
-    }
+        } else {
+          console.log('storage_bookmark undefined');
+          // atualiza o bookmark
+          store.save(storage_bookmark, bookmark_temp);
+          this.setState({ bookmark: bookmark_temp });
+        }
+      });
+    });
+  }
+
+  syncFavoritos = (nicknameId) => {
+    getMyFavorites(nicknameId).then( res => {
+      this.setState({ bookmark_temp: res.places, syncFavoritos: true, isLoading: false });
+      this.compareList();
+    });
+  }
+
+  updateBookmark = async () => {
+    let obj = null;
+    await store.get(storage_bookmark)
+      .then( (res) => {
+        //console.log('executou o updateBookmark');
+        if( this.state.isLoading ) {
+          if(res) {
+            obj = { bookmark: res, isLoading: false };
+          } else {
+            obj = { isLoading: false };
+          }
+        }
+      }).then( () => {
+        this.setState(obj);
+        //console.log('bookmark atualizado por updateBookmark');
+      }).then( () => {
+        //console.log('chamou o syncFavoritos');
+        this.syncFavoritos(nicknameId);
+      })
+      .catch( err => {
+          console.log('updateBookmark error: ', err);
+          this.setState({ isLoading: false });
+      });
   }
 
   componentWillMount() {
@@ -338,7 +427,7 @@ class HomeScreen extends Component {
             (this.state.bookmark.length > 0) &&
             <ScrollView style={{ backgroundColor: '#DDD' }}>
               { 
-                this.state.bookmark.map( (el) => <Itens key={el.id} item={el} />)
+                this.state.bookmark.map( (el) => <Itens key={el.id} item={el} navigate={this.props.navigation.navigate} />)
               }
             </ScrollView>  
           }
