@@ -66,6 +66,14 @@ class LogoTitle extends Component {
   }
 }
 
+const Footer = () => {
+  return (
+    <View style={styles.footer}>
+      <Text>Inova Clima</Text>
+    </View>
+  );
+}
+
 class ModalScreen extends Component {
   render() {
     return (
@@ -169,15 +177,13 @@ class SearchScreen extends Component {
           <ScrollView style={{ backgroundColor: '#DDD' }}>
           {
             this.state.resultado.map( el => {
-              return <Itens key={el.id} item={el} />
+              return <Itens key={el.id} item={el} navigate={this.props.navigation.navigate} />
             })
           }
           </ScrollView>
         }
         </View>
-        <View style={styles.footer}>
-          <Text>Inova Clima</Text>
-        </View>
+        <Footer />
       </View>
     );
 
@@ -198,7 +204,7 @@ class Itens extends Component {
       Min: parseInt(  _.find( props.item.previsoes, {periodo: 'Manha'} ).minimaGrau ),
       iconN: parseInt( _.find( props.item.previsoes, {periodo: 'Manha'} ).icon ),
       isLoading: false
-    }; 
+    };
   }
 
   componentWillMount() {
@@ -261,7 +267,19 @@ class Itens extends Component {
               <Icon name={this.state.iconName} size={100} color={this.state.colorHex} />
             </View>
             <View style={styles.itens_destalhesItem}>
-                <TouchableOpacity onPress={() => alert('ID: '+this.props.item.id+' iconN: '+this.state.iconN)}>
+                <TouchableOpacity
+                  onPress={ 
+                    () => {
+                      if(this.props.item)
+                        this.props.navigate('Details', 
+                          {
+                            item: this.props.item,
+                            title: this.props.item.bairro
+                          }
+                        );
+                    }
+                  } 
+                  >
                   <Text style={styles.itens_txtTitulo}>{this.props.item.cidade} - {this.props.item.bairro}</Text>
                 </TouchableOpacity>
                 <Text style={styles.itens_txtValor}>MAX: {this.state.Max}</Text>
@@ -432,47 +450,97 @@ class HomeScreen extends Component {
             </ScrollView>  
           }
         </View>
-        <View style={styles.footer}>
-          <Text>Inova Clima</Text>
-        </View>
+        <Footer />
       </View>
     );
   }
 }
 
+const Previsao = (props) => {
+  const previsao = props.previsao;
+  const iconN = parseInt(previsao.icon);
+  let iconName = 'ios-sunny';
+  let colorHex = '#efd83d';
+  if( iconN === 1 ) {
+    iconName = 'ios-sunny';
+  } else if ( iconN === 2) {
+    iconName = 'ios-partly-sunny';
+    colorHex = '#47b5f4';
+  } else {
+    iconName = 'ios-cloud';
+    colorHex = '#297dae';
+  }
+
+  return (
+    <View style={styles.itens_item}>
+        <View style={styles.itens_foto}>
+          <Icon name={iconName} size={100} color={colorHex} />
+        </View>
+        <View style={styles.itens_destalhesItem}>
+            <Text style={styles.itens_txtTitulo}>{previsao.periodo}</Text>
+            <Text style={styles.itens_txtValor}>MAX: {previsao.maximaGrau}</Text>
+            <Text style={styles.itens_txtValor}>MIN: {previsao.minimaGrau}</Text>
+            <Text> ----- </Text>
+            <Text>Estabilidade Temp: {previsao.estabilidadeTemp}</Text>
+            <Text>Intensidade Vento: {previsao.intensidadeVento}</Text>
+            <Text>Umid Ar Max: {previsao.umidArMax}</Text>
+            <Text>Umid Ar Min: {previsao.umidArMin}</Text>
+        </View>
+    </View>
+  );
+}
+
 class DetailsScreen extends Component {
   static navigationOptions = ({ navigation }) => {
     return {
-      title: navigation.getParam('otherParam', 'A Nested Details Screen'),
+      title: navigation.getParam('title', 'Detalhes'),
     };
   };
+
+  constructor(props) {
+    super(props);
+    this.state = {
+      item: null
+    }
+  }
+
+  componentWillMount() {
+    const { navigation } = this.props;
+    const item = navigation.getParam('item', null);
+    this.setState({ item });
+  }
 
   render() {
     const { navigation } = this.props;
     const itemId = navigation.getParam('itemId', 'NO-ID');
     const otherParam = navigation.getParam('otherParam', 'some default value');
 
+    if(!this.state.item) {
+      return <View><Text>Item Null</Text></View>
+    }
+
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <Text>Details Screen</Text>
-        <Text>itemId: {JSON.stringify(itemId)}</Text>
-        <Text>otherParam: {JSON.stringify(otherParam)}</Text>
-        <Button
-          title="Go to Details... again"
-          onPress={() => this.props.navigation.navigate('Details')}
-        />
-        <Button
-          title="Go to Home"
-          onPress={() => this.props.navigation.navigate('Home')}
-        />
-        <Button
-          title="Go back"
-          onPress={() => this.props.navigation.goBack()}
-        />
-        <Button
-          title="Update the title"
-          onPress={() => this.props.navigation.setParams({otherParam: 'Updated!'})}
-        />
+      <View style={{ flex: 1}}>
+        <View style={[styles.header, styles.withBottomBorder]} >
+          <Text>
+            {this.state.item.cidade} - {this.state.item.bairro} #{this.state.item.id}
+          </Text>
+        </View>
+        <View style={styles.body} >
+          <Text style={styles.titulo}>Previões</Text>
+          {
+            (this.state.item.previsoes !== 'undefined') &&
+            (this.state.item.previsoes.length > 0) &&
+            <ScrollView style={{ backgroundColor: '#DDD' }}>
+              {
+                this.state.item.previsoes.map( (el) => {
+                  return <Previsao key={el.id} previsao={el} />
+                })
+              }
+            </ScrollView>  
+          }
+        </View>
+        <Footer />
       </View>
     );
   }
