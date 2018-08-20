@@ -16,7 +16,6 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import _ from 'lodash';
 import store from 'react-native-simple-store';
 
-import { DATA } from '../constants';
 import { getSearchPlaces, favoritePlace, getMyFavorites } from '../services/inovaClima';
 
 const storage_prefix='@InovaClima:';
@@ -527,7 +526,7 @@ class DetailsScreen extends Component {
           </Text>
         </View>
         <View style={styles.body} >
-          <Text style={styles.titulo}>Previões</Text>
+          <Text style={styles.titulo}>Previsões</Text>
           {
             (this.state.item.previsoes !== 'undefined') &&
             (this.state.item.previsoes.length > 0) &&
@@ -575,7 +574,16 @@ const MainStack = createStackNavigator(
       },
       title: 'Inova Clima',
       headerRight: (
-        <TouchableOpacity onPress={() => alert('This is a button!')} style={{ flex: 1, marginRight: 25}}>
+        <TouchableOpacity onPress={() => 
+          Alert.alert(
+            'Inova Clima',
+            'Versão: 1.0',
+            [
+              {text: 'OK'}
+            ],
+            { cancelable: false }
+          )}
+          style={{ flex: 1, marginRight: 25}}>
           <LogoTitle />
         </TouchableOpacity>        
       ),
